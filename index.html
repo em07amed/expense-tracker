@@ -1,0 +1,623 @@
+import React, { useState, useEffect } from 'react';
+import { PlusCircle, TrendingUp, TrendingDown, Calendar, DollarSign, CreditCard, Trash2, Edit2, Save, X } from 'lucide-react';
+
+const ExpenseTracker = () => {
+  const [activeTab, setActiveTab] = useState('input');
+  const [activeView, setActiveView] = useState('daily');
+  const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth());
+  const [selectedYear] = useState(new Date().getFullYear());
+  
+  const [monthlySalaries, setMonthlySalaries] = useState({});
+  const [expenses, setExpenses] = useState([]);
+  const [debts, setDebts] = useState([]);
+  
+  const [newExpense, setNewExpense] = useState({
+    date: new Date().toISOString().split('T')[0],
+    category: '',
+    amount: '',
+    type: 'variable',
+    description: ''
+  });
+  
+  const [newDebt, setNewDebt] = useState({
+    name: '',
+    totalAmount: '',
+    monthlyPayment: '',
+    startMonth: new Date().getMonth(),
+    duration: ''
+  });
+
+  const [editingDebt, setEditingDebt] = useState(null);
+  const [editingSalary, setEditingSalary] = useState({});
+
+  useEffect(() => {
+    loadData();
+  }, []);
+
+  useEffect(() => {
+    saveData();
+  }, [monthlySalaries, expenses, debts]);
+
+  const loadData = async () => {
+    try {
+      const salariesData = await window.storage.get('monthlySalaries');
+      const expensesData = await window.storage.get('expenses');
+      const debtsData = await window.storage.get('debts');
+      
+      if (salariesData) setMonthlySalaries(JSON.parse(salariesData.value));
+      if (expensesData) setExpenses(JSON.parse(expensesData.value));
+      if (debtsData) setDebts(JSON.parse(debtsData.value));
+    } catch (error) {
+      console.log('تحميل البيانات للمرة الأولى');
+    }
+  };
+
+  const saveData = async () => {
+    try {
+      await window.storage.set('monthlySalaries', JSON.stringify(monthlySalaries));
+      await window.storage.set('expenses', JSON.stringify(expenses));
+      await window.storage.set('debts', JSON.stringify(debts));
+    } catch (error) {
+      console.error('خطأ في حفظ البيانات:', error);
+    }
+  };
+
+  const updateSalary = (month, value) => {
+    setMonthlySalaries({
+      ...monthlySalaries,
+      [month]: parseFloat(value) || 0
+    });
+  };
+
+  const getSalary = (month) => {
+    return monthlySalaries[month] || 0;
+  };
+
+  const addExpense = () => {
+    if (newExpense.category && newExpense.amount) {
+      setExpenses([...expenses, { ...newExpense, id: Date.now(), amount: parseFloat(newExpense.amount) }]);
+      setNewExpense({
+        date: new Date().toISOString().split('T')[0],
+        category: '',
+        amount: '',
+        type: 'variable',
+        description: ''
+      });
+    }
+  };
+
+  const deleteExpense = (id) => {
+    setExpenses(expenses.filter(exp => exp.id !== id));
+  };
+
+  const addDebt = () => {
+    if (newDebt.name && newDebt.totalAmount && newDebt.monthlyPayment && newDebt.duration) {
+      setDebts([...debts, { 
+        ...newDebt, 
+        id: Date.now(), 
+        totalAmount: parseFloat(newDebt.totalAmount),
+        monthlyPayment: parseFloat(newDebt.monthlyPayment),
+        duration: parseInt(newDebt.duration)
+      }]);
+      setNewDebt({
+        name: '',
+        totalAmount: '',
+        monthlyPayment: '',
+        startMonth: new Date().getMonth(),
+        duration: ''
+      });
+    }
+  };
+
+  const deleteDebt = (id) => {
+    setDebts(debts.filter(debt => debt.id !== id));
+  };
+
+  const startEditDebt = (debt) => {
+    setEditingDebt({ ...debt });
+  };
+
+  const saveEditDebt = () => {
+    setDebts(debts.map(debt => 
+      debt.id === editingDebt.id ? editingDebt : debt
+    ));
+    setEditingDebt(null);
+  };
+
+  const cancelEditDebt = () => {
+    setEditingDebt(null);
+  };
+
+  const getMonthlyExpenses = (month, year) => {
+    return expenses.filter(exp => {
+      const expDate = new Date(exp.date);
+      return expDate.getMonth() === month && expDate.getFullYear() === year;
+    });
+  };
+
+  const getMonthlyDebts = (month) => {
+    return debts.filter(debt => {
+      const monthsSinceStart = month - debt.startMonth;
+      return monthsSinceStart >= 0 && monthsSinceStart < debt.duration;
+    });
+  };
+
+  const calculateMonthlyTotal = (month, year) => {
+    const monthExpenses = getMonthlyExpenses(month, year);
+    const monthDebts = getMonthlyDebts(month);
+    
+    const expensesTotal = monthExpenses.reduce((sum, exp) => sum + exp.amount, 0);
+    const debtsTotal = monthDebts.reduce((sum, debt) => sum + debt.monthlyPayment, 0);
+    
+    return expensesTotal + debtsTotal;
+  };
+
+  const getDailyExpenses = (date) => {
+    return expenses.filter(exp => exp.date === date);
+  };
+
+  const getYearlyTotal = () => {
+    let total = 0;
+    for (let i = 0; i < 12; i++) {
+      total += calculateMonthlyTotal(i, selectedYear);
+    }
+    return total;
+  };
+
+  const getYearlySalaryTotal = () => {
+    let total = 0;
+    for (let i = 0; i < 12; i++) {
+      total += getSalary(i);
+    }
+    return total;
+  };
+
+  const months = ['يناير', 'فبراير', 'مارس', 'أبريل', 'مايو', 'يونيو', 'يوليو', 'أغسطس', 'سبتمبر', 'أكتوبر', 'نوفمبر', 'ديسمبر'];
+
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-4" dir="rtl">
+      <div className="max-w-6xl mx-auto">
+        <div className="bg-white rounded-2xl shadow-2xl overflow-hidden">
+          <div className="bg-gradient-to-r from-blue-600 to-indigo-600 p-6 text-white">
+            <h1 className="text-3xl font-bold flex items-center gap-3">
+              <DollarSign size={36} />
+              نظام إدارة المصاريف الشخصية
+            </h1>
+            <p className="mt-2 opacity-90">تتبع مصاريفك وديونك بسهولة</p>
+          </div>
+
+          <div className="flex border-b">
+            <button
+              onClick={() => setActiveTab('input')}
+              className={`flex-1 py-4 font-semibold transition-all ${
+                activeTab === 'input'
+                  ? 'bg-blue-500 text-white'
+                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+              }`}
+            >
+              إدخال البيانات
+            </button>
+            <button
+              onClick={() => setActiveTab('view')}
+              className={`flex-1 py-4 font-semibold transition-all ${
+                activeTab === 'view'
+                  ? 'bg-blue-500 text-white'
+                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+              }`}
+            >
+              عرض الإحصائيات
+            </button>
+          </div>
+
+          {activeTab === 'input' && (
+            <div className="p-6 space-y-8">
+              <div className="bg-gradient-to-r from-green-50 to-emerald-50 p-6 rounded-xl border-2 border-green-200">
+                <h2 className="text-2xl font-bold text-green-800 mb-4 flex items-center gap-2">
+                  <TrendingUp size={28} />
+                  المرتبات الشهرية
+                </h2>
+                <p className="text-gray-600 mb-4">أدخل المرتب لكل شهر على حدة</p>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {months.map((month, idx) => (
+                    <div key={idx} className="bg-white p-4 rounded-lg border-2 border-green-200">
+                      <label className="block text-sm font-semibold text-gray-700 mb-2">
+                        {month}
+                      </label>
+                      <input
+                        type="number"
+                        value={getSalary(idx) || ''}
+                        onChange={(e) => updateSalary(idx, e.target.value)}
+                        placeholder="0"
+                        className="w-full p-3 border-2 border-green-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                      />
+                    </div>
+                  ))}
+                </div>
+                <div className="mt-4 p-4 bg-green-100 rounded-lg">
+                  <p className="text-lg font-bold text-green-800">
+                    إجمالي المرتبات السنوية: {getYearlySalaryTotal().toLocaleString()} جنيه
+                  </p>
+                </div>
+              </div>
+
+              <div className="bg-gradient-to-r from-orange-50 to-red-50 p-6 rounded-xl border-2 border-orange-200">
+                <h2 className="text-2xl font-bold text-orange-800 mb-4 flex items-center gap-2">
+                  <TrendingDown size={28} />
+                  إضافة مصروف
+                </h2>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <input
+                    type="date"
+                    value={newExpense.date}
+                    onChange={(e) => setNewExpense({...newExpense, date: e.target.value})}
+                    className="p-3 border-2 border-orange-300 rounded-lg focus:ring-2 focus:ring-orange-500"
+                  />
+                  <input
+                    type="text"
+                    value={newExpense.category}
+                    onChange={(e) => setNewExpense({...newExpense, category: e.target.value})}
+                    placeholder="الفئة (مثال: طعام، مواصلات)"
+                    className="p-3 border-2 border-orange-300 rounded-lg focus:ring-2 focus:ring-orange-500"
+                  />
+                  <input
+                    type="number"
+                    value={newExpense.amount}
+                    onChange={(e) => setNewExpense({...newExpense, amount: e.target.value})}
+                    placeholder="المبلغ"
+                    className="p-3 border-2 border-orange-300 rounded-lg focus:ring-2 focus:ring-orange-500"
+                  />
+                  <select
+                    value={newExpense.type}
+                    onChange={(e) => setNewExpense({...newExpense, type: e.target.value})}
+                    className="p-3 border-2 border-orange-300 rounded-lg focus:ring-2 focus:ring-orange-500"
+                  >
+                    <option value="fixed">ثابت</option>
+                    <option value="variable">متغير</option>
+                  </select>
+                  <input
+                    type="text"
+                    value={newExpense.description}
+                    onChange={(e) => setNewExpense({...newExpense, description: e.target.value})}
+                    placeholder="وصف (اختياري)"
+                    className="p-3 border-2 border-orange-300 rounded-lg focus:ring-2 focus:ring-orange-500 md:col-span-2"
+                  />
+                </div>
+                <button
+                  onClick={addExpense}
+                  className="mt-4 w-full bg-gradient-to-r from-orange-500 to-red-500 text-white p-4 rounded-lg font-bold hover:from-orange-600 hover:to-red-600 transition-all flex items-center justify-center gap-2"
+                >
+                  <PlusCircle size={24} />
+                  إضافة المصروف
+                </button>
+              </div>
+
+              <div className="bg-gradient-to-r from-purple-50 to-pink-50 p-6 rounded-xl border-2 border-purple-200">
+                <h2 className="text-2xl font-bold text-purple-800 mb-4 flex items-center gap-2">
+                  <CreditCard size={28} />
+                  إدارة الديون
+                </h2>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                  <input
+                    type="text"
+                    value={newDebt.name}
+                    onChange={(e) => setNewDebt({...newDebt, name: e.target.value})}
+                    placeholder="اسم الدين"
+                    className="p-3 border-2 border-purple-300 rounded-lg focus:ring-2 focus:ring-purple-500"
+                  />
+                  <input
+                    type="number"
+                    value={newDebt.totalAmount}
+                    onChange={(e) => setNewDebt({...newDebt, totalAmount: e.target.value})}
+                    placeholder="المبلغ الإجمالي"
+                    className="p-3 border-2 border-purple-300 rounded-lg focus:ring-2 focus:ring-purple-500"
+                  />
+                  <input
+                    type="number"
+                    value={newDebt.monthlyPayment}
+                    onChange={(e) => setNewDebt({...newDebt, monthlyPayment: e.target.value})}
+                    placeholder="القسط الشهري"
+                    className="p-3 border-2 border-purple-300 rounded-lg focus:ring-2 focus:ring-purple-500"
+                  />
+                  <input
+                    type="number"
+                    value={newDebt.duration}
+                    onChange={(e) => setNewDebt({...newDebt, duration: e.target.value})}
+                    placeholder="المدة (بالأشهر)"
+                    className="p-3 border-2 border-purple-300 rounded-lg focus:ring-2 focus:ring-purple-500"
+                  />
+                  <select
+                    value={newDebt.startMonth}
+                    onChange={(e) => setNewDebt({...newDebt, startMonth: parseInt(e.target.value)})}
+                    className="p-3 border-2 border-purple-300 rounded-lg focus:ring-2 focus:ring-purple-500 md:col-span-2"
+                  >
+                    {months.map((month, idx) => (
+                      <option key={idx} value={idx}>{month}</option>
+                    ))}
+                  </select>
+                </div>
+                <button
+                  onClick={addDebt}
+                  className="w-full bg-gradient-to-r from-purple-500 to-pink-500 text-white p-4 rounded-lg font-bold hover:from-purple-600 hover:to-pink-600 transition-all flex items-center justify-center gap-2"
+                >
+                  <PlusCircle size={24} />
+                  إضافة الدين
+                </button>
+
+                {debts.length > 0 && (
+                  <div className="mt-6 space-y-3">
+                    <h3 className="font-bold text-lg text-purple-800">الديون الحالية:</h3>
+                    {debts.map(debt => (
+                      <div key={debt.id} className="bg-white p-4 rounded-lg border-2 border-purple-200">
+                        {editingDebt && editingDebt.id === debt.id ? (
+                          <div className="space-y-3">
+                            <input
+                              type="text"
+                              value={editingDebt.name}
+                              onChange={(e) => setEditingDebt({...editingDebt, name: e.target.value})}
+                              className="w-full p-2 border rounded"
+                            />
+                            <input
+                              type="number"
+                              value={editingDebt.totalAmount}
+                              onChange={(e) => setEditingDebt({...editingDebt, totalAmount: parseFloat(e.target.value)})}
+                              className="w-full p-2 border rounded"
+                            />
+                            <input
+                              type="number"
+                              value={editingDebt.monthlyPayment}
+                              onChange={(e) => setEditingDebt({...editingDebt, monthlyPayment: parseFloat(e.target.value)})}
+                              className="w-full p-2 border rounded"
+                            />
+                            <input
+                              type="number"
+                              value={editingDebt.duration}
+                              onChange={(e) => setEditingDebt({...editingDebt, duration: parseInt(e.target.value)})}
+                              className="w-full p-2 border rounded"
+                            />
+                            <div className="flex gap-2">
+                              <button
+                                onClick={saveEditDebt}
+                                className="flex-1 bg-green-500 text-white p-2 rounded flex items-center justify-center gap-2"
+                              >
+                                <Save size={18} />
+                                حفظ
+                              </button>
+                              <button
+                                onClick={cancelEditDebt}
+                                className="flex-1 bg-gray-500 text-white p-2 rounded flex items-center justify-center gap-2"
+                              >
+                                <X size={18} />
+                                إلغاء
+                              </button>
+                            </div>
+                          </div>
+                        ) : (
+                          <>
+                            <div className="flex justify-between items-start mb-2">
+                              <div>
+                                <h4 className="font-bold text-lg">{debt.name}</h4>
+                                <p className="text-gray-600">المبلغ الإجمالي: {debt.totalAmount.toLocaleString()} جنيه</p>
+                                <p className="text-gray-600">القسط الشهري: {debt.monthlyPayment.toLocaleString()} جنيه</p>
+                                <p className="text-gray-600">المدة: {debt.duration} شهر</p>
+                                <p className="text-gray-600">يبدأ من: {months[debt.startMonth]}</p>
+                              </div>
+                              <div className="flex gap-2">
+                                <button
+                                  onClick={() => startEditDebt(debt)}
+                                  className="text-blue-600 hover:text-blue-800"
+                                >
+                                  <Edit2 size={20} />
+                                </button>
+                                <button
+                                  onClick={() => deleteDebt(debt.id)}
+                                  className="text-red-600 hover:text-red-800"
+                                >
+                                  <Trash2 size={20} />
+                                </button>
+                              </div>
+                            </div>
+                          </>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {activeTab === 'view' && (
+            <div className="p-6">
+              <div className="flex gap-2 mb-6 flex-wrap">
+                <button
+                  onClick={() => setActiveView('daily')}
+                  className={`flex-1 min-w-[100px] py-3 rounded-lg font-bold transition-all ${
+                    activeView === 'daily'
+                      ? 'bg-blue-500 text-white shadow-lg'
+                      : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                  }`}
+                >
+                  يومي
+                </button>
+                <button
+                  onClick={() => setActiveView('monthly')}
+                  className={`flex-1 min-w-[100px] py-3 rounded-lg font-bold transition-all ${
+                    activeView === 'monthly'
+                      ? 'bg-blue-500 text-white shadow-lg'
+                      : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                  }`}
+                >
+                  شهري
+                </button>
+                <button
+                  onClick={() => setActiveView('yearly')}
+                  className={`flex-1 min-w-[100px] py-3 rounded-lg font-bold transition-all ${
+                    activeView === 'yearly'
+                      ? 'bg-blue-500 text-white shadow-lg'
+                      : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                  }`}
+                >
+                  سنوي
+                </button>
+              </div>
+
+              {activeView === 'daily' && (
+                <div className="space-y-4">
+                  <h2 className="text-2xl font-bold text-gray-800 mb-4">المصاريف اليومية</h2>
+                  {expenses.length === 0 ? (
+                    <p className="text-gray-500 text-center py-8">لا توجد مصاريف مسجلة</p>
+                  ) : (
+                    <div className="space-y-3">
+                      {expenses.sort((a, b) => new Date(b.date) - new Date(a.date)).map(exp => (
+                        <div key={exp.id} className="bg-white border-2 border-gray-200 p-4 rounded-lg hover:shadow-lg transition-shadow">
+                          <div className="flex justify-between items-start">
+                            <div className="flex-1">
+                              <div className="flex items-center gap-2 mb-2">
+                                <Calendar size={18} className="text-blue-600" />
+                                <span className="font-semibold">{new Date(exp.date).toLocaleDateString('ar-EG')}</span>
+                                <span className={`px-2 py-1 rounded text-xs ${
+                                  exp.type === 'fixed' ? 'bg-blue-100 text-blue-800' : 'bg-orange-100 text-orange-800'
+                                }`}>
+                                  {exp.type === 'fixed' ? 'ثابت' : 'متغير'}
+                                </span>
+                              </div>
+                              <p className="text-lg font-bold text-gray-800">{exp.category}</p>
+                              {exp.description && <p className="text-gray-600 text-sm mt-1">{exp.description}</p>}
+                              <p className="text-2xl font-bold text-red-600 mt-2">{exp.amount.toLocaleString()} جنيه</p>
+                            </div>
+                            <button
+                              onClick={() => deleteExpense(exp.id)}
+                              className="text-red-600 hover:text-red-800 hover:bg-red-50 p-2 rounded"
+                            >
+                              <Trash2 size={20} />
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {activeView === 'monthly' && (
+                <div className="space-y-4">
+                  <div className="mb-6">
+                    <label className="block text-lg font-semibold mb-2">اختر الشهر:</label>
+                    <select
+                      value={selectedMonth}
+                      onChange={(e) => setSelectedMonth(parseInt(e.target.value))}
+                      className="w-full p-3 border-2 border-blue-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                    >
+                      {months.map((month, idx) => (
+                        <option key={idx} value={idx}>{month}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="bg-gradient-to-r from-blue-500 to-indigo-500 text-white p-6 rounded-xl shadow-lg">
+                    <h3 className="text-xl font-bold mb-4">ملخص {months[selectedMonth]}</h3>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      <div className="bg-white bg-opacity-20 p-4 rounded-lg">
+                        <p className="text-sm opacity-90">الدخل</p>
+                        <p className="text-2xl font-bold">{getSalary(selectedMonth).toLocaleString()}</p>
+                      </div>
+                      <div className="bg-white bg-opacity-20 p-4 rounded-lg">
+                        <p className="text-sm opacity-90">المصاريف</p>
+                        <p className="text-2xl font-bold">{calculateMonthlyTotal(selectedMonth, selectedYear).toLocaleString()}</p>
+                      </div>
+                      <div className="bg-white bg-opacity-20 p-4 rounded-lg">
+                        <p className="text-sm opacity-90">الباقي</p>
+                        <p className="text-2xl font-bold">{(getSalary(selectedMonth) - calculateMonthlyTotal(selectedMonth, selectedYear)).toLocaleString()}</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="bg-white p-6 rounded-xl border-2 border-gray-200">
+                    <h4 className="font-bold text-lg mb-3">المصاريف:</h4>
+                    {getMonthlyExpenses(selectedMonth, selectedYear).length === 0 ? (
+                      <p className="text-gray-500">لا توجد مصاريف في هذا الشهر</p>
+                    ) : (
+                      <div className="space-y-2">
+                        {getMonthlyExpenses(selectedMonth, selectedYear).map(exp => (
+                          <div key={exp.id} className="flex justify-between items-center p-3 bg-gray-50 rounded">
+                            <span className="font-semibold">{exp.category}</span>
+                            <span className="text-red-600 font-bold">{exp.amount.toLocaleString()}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="bg-white p-6 rounded-xl border-2 border-gray-200">
+                    <h4 className="font-bold text-lg mb-3">أقساط الديون:</h4>
+                    {getMonthlyDebts(selectedMonth).length === 0 ? (
+                      <p className="text-gray-500">لا توجد أقساط في هذا الشهر</p>
+                    ) : (
+                      <div className="space-y-2">
+                        {getMonthlyDebts(selectedMonth).map(debt => (
+                          <div key={debt.id} className="flex justify-between items-center p-3 bg-purple-50 rounded">
+                            <span className="font-semibold">{debt.name}</span>
+                            <span className="text-purple-600 font-bold">{debt.monthlyPayment.toLocaleString()}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {activeView === 'yearly' && (
+                <div className="space-y-4">
+                  <h2 className="text-2xl font-bold text-gray-800 mb-4">الإحصائيات السنوية {selectedYear}</h2>
+                  
+                  <div className="bg-gradient-to-r from-green-500 to-emerald-500 text-white p-6 rounded-xl shadow-lg">
+                    <h3 className="text-xl font-bold mb-4">الملخص السنوي</h3>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      <div className="bg-white bg-opacity-20 p-4 rounded-lg">
+                        <p className="text-sm opacity-90">إجمالي الدخل</p>
+                        <p className="text-2xl font-bold">{getYearlySalaryTotal().toLocaleString()}</p>
+                      </div>
+                      <div className="bg-white bg-opacity-20 p-4 rounded-lg">
+                        <p className="text-sm opacity-90">إجمالي المصاريف</p>
+                        <p className="text-2xl font-bold">{getYearlyTotal().toLocaleString()}</p>
+                      </div>
+                      <div className="bg-white bg-opacity-20 p-4 rounded-lg">
+                        <p className="text-sm opacity-90">الباقي</p>
+                        <p className="text-2xl font-bold">{(getYearlySalaryTotal() - getYearlyTotal()).toLocaleString()}</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="bg-white p-6 rounded-xl border-2 border-gray-200">
+                    <h4 className="font-bold text-lg mb-4">تفاصيل كل شهر:</h4>
+                    <div className="space-y-2">
+                      {months.map((month, idx) => {
+                        const monthTotal = calculateMonthlyTotal(idx, selectedYear);
+                        const monthSalary = getSalary(idx);
+                        const balance = monthSalary - monthTotal;
+                        return (
+                          <div key={idx} className="flex justify-between items-center p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">
+                            <span className="font-semibold text-lg">{month}</span>
+                            <div className="text-left">
+                              <p className="text-blue-600 font-semibold">دخل: {monthSalary.toLocaleString()}</p>
+                              <p className="text-red-600 font-bold">مصاريف: {monthTotal.toLocaleString()}</p>
+                              <p className={`font-bold ${balance >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                                باقي: {balance.toLocaleString()}
+                              </p>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default ExpenseTracker;
